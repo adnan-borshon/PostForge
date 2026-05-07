@@ -1,0 +1,158 @@
+// Prisma schema for PostForge
+// Supported Platforms: YouTube (Phase 1)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum ProjectStatus {
+  DRAFT
+  PROCESSING
+  READY
+  SCHEDULED
+  PUBLISHING
+  PUBLISHED
+  FAILED
+}
+
+enum MediaStatus {
+  PENDING
+  UPLOADING
+  PROCESSING
+  READY
+  FAILED
+}
+
+enum Platform {
+  YOUTUBE
+}
+
+enum PostStatus {
+  DRAFT
+  SCHEDULED
+  PUBLISHING
+  PUBLISHED
+  FAILED
+}
+
+enum JobStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+model User {
+  id               String            @id @default(uuid())
+  email            String            @unique
+  password         String
+  name             String?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  projects         Project[]
+  platformAccounts PlatformAccount[]
+
+  @@index([email])
+}
+
+model Project {
+  id            String         @id @default(uuid())
+  title         String
+  description   String?
+  status        ProjectStatus  @default(DRAFT)
+  userId        String
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  media         Media[]
+  platformPosts PlatformPost[]
+
+  @@index([userId])
+  @@index([status])
+}
+
+model Media {
+  id             String      @id @default(uuid())
+  projectId      String
+  fileName       String
+  fileSize       Int
+  mimeType       String
+  storageKey     String
+  storageBucket  String
+  duration       Float?
+  thumbnailKey   String?
+  status         MediaStatus @default(PENDING)
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+  project        Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@index([status])
+}
+
+model PlatformAccount {
+  id             String         @id @default(uuid())
+  userId         String
+  platform       Platform       @default(YOUTUBE)
+  accountName    String
+  accessToken    String
+  refreshToken   String
+  tokenExpiresAt DateTime
+  isActive       Boolean        @default(true)
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  user           User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  platformPosts  PlatformPost[]
+
+  @@index([userId])
+  @@index([platform])
+}
+
+model PlatformPost {
+  id                String          @id @default(uuid())
+  projectId         String
+  platformAccountId String
+  platform          Platform        @default(YOUTUBE)
+  status            PostStatus      @default(DRAFT)
+  title             String
+  description       String?
+  tags              String[]
+  scheduledAt       DateTime?
+  publishedAt       DateTime?
+  platformVideoId   String?
+  platformUrl       String?
+  errorMessage      String?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  project           Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  platformAccount   PlatformAccount @relation(fields: [platformAccountId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@index([platformAccountId])
+  @@index([scheduledAt])
+  @@index([status])
+}
+
+model ScheduledJob {
+  id             String     @id @default(uuid())
+  platformPostId String     @unique
+  jobId          String
+  queueName      String
+  scheduledAt    DateTime
+  status         JobStatus  @default(PENDING)
+  attempts       Int        @default(0)
+  lastAttemptAt  DateTime?
+  errorMessage   String?
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+
+  @@index([platformPostId])
+  @@index([scheduledAt])
+  @@index([status])
+}
